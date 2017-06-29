@@ -10,11 +10,11 @@ import java.util.Properties;
 import org.pentaho.di.core.CheckResult;
 import org.pentaho.di.core.CheckResultInterface;
 import org.pentaho.di.core.Const;
-import org.pentaho.di.core.Counter;
 import org.pentaho.di.core.database.DatabaseMeta;
 import org.pentaho.di.core.exception.KettleException;
 import org.pentaho.di.core.exception.KettleXMLException;
 import org.pentaho.di.core.row.RowMetaInterface;
+import org.pentaho.di.core.variables.VariableSpace;
 import org.pentaho.di.core.xml.XMLHandler;
 import org.pentaho.di.repository.ObjectId;
 import org.pentaho.di.repository.Repository;
@@ -25,9 +25,9 @@ import org.pentaho.di.trans.step.StepDataInterface;
 import org.pentaho.di.trans.step.StepInterface;
 import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
+import org.pentaho.metastore.api.IMetaStore;
 import org.w3c.dom.Node;
 
-import kafka.producer.ProducerConfig;
 import org.eclipse.swt.widgets.Shell;
 import org.pentaho.di.core.annotations.Step;
 import org.pentaho.di.trans.step.StepDialogInterface;
@@ -47,18 +47,23 @@ import org.pentaho.di.trans.step.StepDialogInterface;
 		categoryDescription="i18n:org.pentaho.di.trans.step:BaseStep.Category.Output")
 public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface {
 
-	public static final String[] KAFKA_PROPERTIES_NAMES = new String[] { "metadata.broker.list",
-			"request.required.acks", "producer.type", "serializer.class", "request.timeout.ms", "key.serializer.class",
-			"partitioner.class", "compression.codec", "compressed.topics", "message.send.max.retries",
-			"retry.backoff.ms", "topic.metadata.refresh.interval.ms", "queue.buffering.max.ms",
-			"queue.buffering.max.messages", "queue.enqueue.timeout.ms", "batch.num.messages", "send.buffer.bytes",
-			"client.id" };
-	public static final Map<String, String> KAFKA_PROPERTIES_DEFAULTS = new HashMap<String, String>();
+	public static final String[] KAFKA_PROPERTIES_NAMES = new String[] { "bootstrap.servers", "client.id",
+			"acks", "retries", "timeout.ms", "batch.size","linger.ms","buffer.memory",
+            "key.serializer","value.serializer"
+    };
+
+	public static final Map<String, String> KAFKA_PROPERTIES_DEFAULTS = new HashMap<>();
 	static {
-		KAFKA_PROPERTIES_DEFAULTS.put("metadata.broker.list", "localhost:9092");
-		KAFKA_PROPERTIES_DEFAULTS.put("request.required.acks", "1");
-		KAFKA_PROPERTIES_DEFAULTS.put("producer.type", "sync");
-		KAFKA_PROPERTIES_DEFAULTS.put("serializer.class", "kafka.serializer.DefaultEncoder");
+		KAFKA_PROPERTIES_DEFAULTS.put("bootstrap.servers", "localhost:9092");
+        KAFKA_PROPERTIES_DEFAULTS.put("client.id", "0");
+		KAFKA_PROPERTIES_DEFAULTS.put("acks", "1");
+        KAFKA_PROPERTIES_DEFAULTS.put("retries", "0");
+        KAFKA_PROPERTIES_DEFAULTS.put("batch.size", "16384");
+        KAFKA_PROPERTIES_DEFAULTS.put("linger.ms", "1");
+        KAFKA_PROPERTIES_DEFAULTS.put("buffer.memory", "33554432");//32M
+        KAFKA_PROPERTIES_DEFAULTS.put("timeout.ms", "30000");
+        KAFKA_PROPERTIES_DEFAULTS.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+		KAFKA_PROPERTIES_DEFAULTS.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 	}
 
 	private Properties kafkaProperties = new Properties();
@@ -116,7 +121,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 	}
 
 	public void check(List<CheckResultInterface> remarks, TransMeta transMeta, StepMeta stepMeta, RowMetaInterface prev,
-			String input[], String output[], RowMetaInterface info) {
+					  String input[], String output[], RowMetaInterface info, VariableSpace space, Repository repository, IMetaStore metaStore) {
 
 		if (isEmpty(topic)) {
 			remarks.add(new CheckResult(CheckResultInterface.TYPE_RESULT_ERROR,
@@ -127,7 +132,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 					Messages.getString("KafkaProducerMeta.Check.InvalidMessageField"), stepMeta));
 		}
 		try {
-			new ProducerConfig(kafkaProperties);
+			new org.apache.kafka.clients.producer.KafkaProducer(kafkaProperties);
 		} catch (IllegalArgumentException e) {
 			remarks.add(new CheckResult(CheckResultInterface.TYPE_RESULT_ERROR, e.getMessage(), stepMeta));
 		}
@@ -142,7 +147,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		return new KafkaProducerData();
 	}
 
-	public void loadXML(Node stepnode, List<DatabaseMeta> databases, Map<String, Counter> counters)
+	public void loadXML(Node stepnode, List<DatabaseMeta> databases, IMetaStore metaStore)
 			throws KettleXMLException {
 
 		try {
@@ -186,7 +191,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		return retval.toString();
 	}
 
-	public void readRep(Repository rep, ObjectId stepId, List<DatabaseMeta> databases, Map<String, Counter> counters)
+	public void readRep(Repository rep, IMetaStore metaStore, ObjectId stepId, List<DatabaseMeta> databases)
 			throws KettleException {
 		try {
 			topic = rep.getStepAttributeString(stepId, "TOPIC");
@@ -208,7 +213,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		}
 	}
 
-	public void saveRep(Repository rep, ObjectId transformationId, ObjectId stepId) throws KettleException {
+	public void saveRep(Repository rep, IMetaStore metaStore, ObjectId transformationId, ObjectId stepId) throws KettleException {
 		try {
 			if (topic != null) {
 				rep.saveStepAttribute(transformationId, stepId, "TOPIC", topic);
