@@ -8,12 +8,15 @@ Apache Kafka producer step plug-in for Pentaho Kettle.
 
 ### Screenshots ###
 
-![Using Apache Kafka Producer in Kettle](https://raw.github.com/RuckusWirelessIL/pentaho-kafka-producer/master/doc/example.png)
+![Using Apache Kafka Producer in Kettle](https://github.com/JunfengDuan/kettle-kafka-plugin/blob/master/doc/example1.png)
 
+### Pentaho Compatibility ###
+
+The kettle version is 7.0.0.0-25
 
 ### Apache Kafka Compatibility ###
 
-The producer depends on Apache Kafka 0.8.1.1, which means that the broker must be of 0.8.x version or later.
+The producer depends on Apache Kafka 0.10.2.0, which means that the broker must be of 0.10.x version or later.
 
 
 ### Installation ###
