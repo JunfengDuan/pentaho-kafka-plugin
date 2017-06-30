@@ -1,4 +1,4 @@
-pentaho-kafka-producer
+pentaho-kafka-plugin
 ======================
 
 Apache Kafka producer step plug-in for Pentaho Kettle.
