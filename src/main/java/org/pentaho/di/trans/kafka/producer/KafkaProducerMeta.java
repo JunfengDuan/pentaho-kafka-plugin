@@ -28,9 +28,7 @@ import org.pentaho.di.trans.step.StepMetaInterface;
 import org.pentaho.metastore.api.IMetaStore;
 import org.w3c.dom.Node;
 
-import org.eclipse.swt.widgets.Shell;
 import org.pentaho.di.core.annotations.Step;
-import org.pentaho.di.trans.step.StepDialogInterface;
 
 /**
  * Kafka Producer step definitions and serializer to/from XML and to/from Kettle
@@ -68,7 +66,6 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 
 	private Properties kafkaProperties = new Properties();
 	private String topic;
-	private String messageField;
 	private String keyField;
         
 	public Properties getKafkaProperties() {
@@ -105,20 +102,6 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		this.keyField = field;
 	}
 
-	/**
-	 * @return Target message field name in Kettle stream
-	 */
-	public String getMessageField() {
-		return messageField;
-	}
-
-	/**
-	 * @param field
-	 *            Target message field name in Kettle stream
-	 */
-	public void setMessageField(String field) {
-		this.messageField = field;
-	}
 
 	public void check(List<CheckResultInterface> remarks, TransMeta transMeta, StepMeta stepMeta, RowMetaInterface prev,
 					  String input[], String output[], RowMetaInterface info, VariableSpace space, Repository repository, IMetaStore metaStore) {
@@ -127,10 +110,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			remarks.add(new CheckResult(CheckResultInterface.TYPE_RESULT_ERROR,
 					Messages.getString("KafkaProducerMeta.Check.InvalidTopic"), stepMeta));
 		}
-		if (isEmpty(messageField)) {
-			remarks.add(new CheckResult(CheckResultInterface.TYPE_RESULT_ERROR,
-					Messages.getString("KafkaProducerMeta.Check.InvalidMessageField"), stepMeta));
-		}
+
 		try {
 			new org.apache.kafka.clients.producer.KafkaProducer(kafkaProperties);
 		} catch (IllegalArgumentException e) {
@@ -152,7 +132,6 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 
 		try {
 			topic = XMLHandler.getTagValue(stepnode, "TOPIC");
-			messageField = XMLHandler.getTagValue(stepnode, "FIELD");
 			keyField = XMLHandler.getTagValue(stepnode, "KEYFIELD");
 			Node kafkaNode = XMLHandler.getSubNode(stepnode, "KAFKA");
 			String[] kafkaElements = XMLHandler.getNodeElements(kafkaNode);
@@ -174,9 +153,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		if (topic != null) {
 			retval.append("    ").append(XMLHandler.addTagValue("TOPIC", topic));
 		}
-		if (messageField != null) {
-			retval.append("    ").append(XMLHandler.addTagValue("FIELD", messageField));
-		}
+
 		if (keyField != null) {
 			retval.append("    ").append(XMLHandler.addTagValue("KEYFIELD", keyField));
 		}
@@ -195,7 +172,6 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			throws KettleException {
 		try {
 			topic = rep.getStepAttributeString(stepId, "TOPIC");
-			messageField = rep.getStepAttributeString(stepId, "FIELD");
 			keyField = rep.getStepAttributeString(stepId, "KEYFIELD");
 			String kafkaPropsXML = rep.getStepAttributeString(stepId, "KAFKA");
 			if (kafkaPropsXML != null) {
@@ -218,9 +194,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			if (topic != null) {
 				rep.saveStepAttribute(transformationId, stepId, "TOPIC", topic);
 			}
-			if (messageField != null) {
-				rep.saveStepAttribute(transformationId, stepId, "FIELD", messageField);
-			}
+
 			if (keyField != null) {
 				rep.saveStepAttribute(transformationId, stepId, "KEYFIELD", keyField);
 			}

@@ -50,7 +50,6 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 
 	private KafkaProducerMeta producerMeta;
 	private TextVar wTopicName;
-	private CCombo wMessageField;
 	private CCombo wKeyField;
 	private TableView wProps;
 
@@ -141,26 +140,6 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 			previousFields = new RowMeta();
 		}
 
-		// Message field
-		Label wlMessageField = new Label(shell, SWT.RIGHT);
-		wlMessageField.setText(Messages.getString("KafkaProducerDialog.MessageFieldName.Label"));
-		props.setLook(wlMessageField);
-		FormData fdlMessageField = new FormData();
-		fdlMessageField.top = new FormAttachment(lastControl, margin);
-		fdlMessageField.left = new FormAttachment(0, 0);
-		fdlMessageField.right = new FormAttachment(middle, -margin);
-		wlMessageField.setLayoutData(fdlMessageField);
-		wMessageField = new CCombo(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-		wMessageField.setItems(previousFields.getFieldNames());
-		props.setLook(wMessageField);
-		wMessageField.addModifyListener(lsMod);
-		FormData fdMessageField = new FormData();
-		fdMessageField.top = new FormAttachment(lastControl, margin);
-		fdMessageField.left = new FormAttachment(middle, 0);
-		fdMessageField.right = new FormAttachment(100, 0);
-		wMessageField.setLayoutData(fdMessageField);
-		lastControl = wMessageField;
-
 		// Key Field
 		Label wlKeyField = new Label(shell, SWT.RIGHT);
 		wlKeyField.setText(Messages.getString("KafkaProducerDialog.KeyFieldName.Label"));
@@ -225,7 +204,6 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		};
 		wStepname.addSelectionListener(lsDef);
 		wTopicName.addSelectionListener(lsDef);
-		wMessageField.addSelectionListener(lsDef);
 		wKeyField.addSelectionListener(lsDef);
 
 		// Detect X or ALT-F4 or something that kills this window...
@@ -258,7 +236,6 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 			wStepname.setText(stepname);
 		}
 		wTopicName.setText(Const.NVL(producerMeta.getTopic(), ""));
-		wMessageField.setText(Const.NVL(producerMeta.getMessageField(), ""));
 		wKeyField.setText(Const.NVL(producerMeta.getKeyField(), ""));
 
 		TreeSet<String> propNames = new TreeSet<String>();
@@ -297,7 +274,6 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 	 */
 	private void setData(KafkaProducerMeta producerMeta) {
 		producerMeta.setTopic(wTopicName.getText());
-		producerMeta.setMessageField(wMessageField.getText());
 		producerMeta.setKeyField(wKeyField.getText());
 
 		Properties kafkaProperties = producerMeta.getKafkaProperties();
