@@ -1,30 +1,34 @@
 package org.pentaho.di.ui.trans.kafka.producer;
 
+import java.awt.*;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CCombo;
+import org.eclipse.swt.custom.CTabFolder;
+import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.events.ModifyEvent;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.ShellAdapter;
 import org.eclipse.swt.events.ShellEvent;
+import org.eclipse.swt.graphics.*;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
+import org.eclipse.swt.widgets.*;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.Listener;
-import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 import org.pentaho.di.core.Const;
+import org.pentaho.di.core.Props;
+import org.pentaho.di.core.exception.KettleException;
 import org.pentaho.di.core.exception.KettleStepException;
 import org.pentaho.di.core.row.RowMeta;
 import org.pentaho.di.core.row.RowMetaInterface;
@@ -47,6 +51,20 @@ import org.pentaho.di.trans.kafka.producer.Messages;
  * @author Michael Spector
  */
 public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInterface {
+
+	private static Class<?> PKG = KafkaProducerMeta.class;
+
+	private CTabFolder wTabFolder;
+	private FormData fdTabFolder;
+	private CTabItem wGeneralTab;
+    private Composite wGeneralComp;
+	private FormData fdGeneralComp;
+
+	private String[] fieldNames;
+    private ModifyListener lsMod;
+
+	private CTabItem wFieldsTab;
+    private TableView wFields;
 
 	private KafkaProducerMeta producerMeta;
 	private TextVar wTopicName;
@@ -76,7 +94,7 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		props.setLook(shell);
 		setShellImage(shell, producerMeta);
 
-		ModifyListener lsMod = new ModifyListener() {
+		lsMod = new ModifyListener() {
 			public void modifyText(ModifyEvent e) {
 				producerMeta.setChanged();
 			}
@@ -160,6 +178,15 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		wKeyField.setLayoutData(fdKeyField);
 		lastControl = wKeyField;
 
+        wTabFolder = new CTabFolder( shell, SWT.BORDER );
+        props.setLook( wTabFolder, Props.WIDGET_STYLE_TAB );
+
+		// GENERAL TAB
+		addGeneralTab();
+
+		// Fields TAB
+		addFieldsTab();
+
 		// Buttons
 		wOK = new Button(shell, SWT.PUSH);
 		wOK.setText(BaseMessages.getString("System.Button.OK")); //$NON-NLS-1$
@@ -168,54 +195,20 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 
 		setButtonPositions(new Button[] { wOK, wCancel }, margin, null);
 
-		// Kafka properties
-		ColumnInfo[] colinf = new ColumnInfo[] {
-				new ColumnInfo(Messages.getString("KafkaProducerDialog.TableView.NameCol.Label"),
-						ColumnInfo.COLUMN_TYPE_TEXT, false),
-				new ColumnInfo(Messages.getString("KafkaProducerDialog.TableView.ValueCol.Label"),
-						ColumnInfo.COLUMN_TYPE_TEXT, false), };
-
-		wProps = new TableView(transMeta, shell, SWT.FULL_SELECTION | SWT.MULTI, colinf, 1, lsMod, props);
-		FormData fdProps = new FormData();
-		fdProps.top = new FormAttachment(lastControl, margin * 2);
-		fdProps.bottom = new FormAttachment(wOK, -margin * 2);
-		fdProps.left = new FormAttachment(0, 0);
-		fdProps.right = new FormAttachment(100, 0);
-		wProps.setLayoutData(fdProps);
+        fdTabFolder = new FormData();
+        fdTabFolder.left = new FormAttachment( 0, 0 );
+        fdTabFolder.top = new FormAttachment( lastControl, margin );
+        fdTabFolder.right = new FormAttachment( 100, 0 );
+        fdTabFolder.bottom = new FormAttachment( wOK, -margin );
+        wTabFolder.setLayoutData( fdTabFolder );
 
 		// Add listeners
-		lsCancel = new Listener() {
-			public void handleEvent(Event e) {
-				cancel();
-			}
-		};
-		lsOK = new Listener() {
-			public void handleEvent(Event e) {
-				ok();
-			}
-		};
-		wCancel.addListener(SWT.Selection, lsCancel);
-		wOK.addListener(SWT.Selection, lsOK);
+		addStandardListeners();
 
-		lsDef = new SelectionAdapter() {
-			public void widgetDefaultSelected(SelectionEvent e) {
-				ok();
-			}
-		};
-		wStepname.addSelectionListener(lsDef);
-		wTopicName.addSelectionListener(lsDef);
-		wKeyField.addSelectionListener(lsDef);
-
-		// Detect X or ALT-F4 or something that kills this window...
-		shell.addShellListener(new ShellAdapter() {
-			public void shellClosed(ShellEvent e) {
-				cancel();
-			}
-		});
+        wTabFolder.setSelection( 0 );
 
 		// Set the shell size, based upon previous time...
-		setSize(shell, 400, 350, true);
-
+        setSize(shell, 400, 350, true);
 		getData(producerMeta, true);
 		producerMeta.setChanged(changed);
 
@@ -227,6 +220,119 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		}
 		return stepname;
 	}
+
+	private void addGeneralTab() {
+		wGeneralTab = new CTabItem( wTabFolder, SWT.NONE );
+		wGeneralTab.setText( BaseMessages.getString( PKG, "KafkaProducerDialog.General.Tab" ) );
+
+        FormLayout generalLayout = new FormLayout();
+        generalLayout.marginWidth = Const.FORM_MARGIN;
+        generalLayout.marginHeight = Const.FORM_MARGIN;
+
+        wGeneralComp = new Composite( wTabFolder, SWT.NONE );
+        wGeneralComp.setLayout( generalLayout );
+        props.setLook( wGeneralComp );
+
+        // Kafka properties
+        ColumnInfo[] columnInfo = new ColumnInfo[] {
+                new ColumnInfo(Messages.getString("KafkaProducerDialog.TableView.NameCol.Label"),
+                        ColumnInfo.COLUMN_TYPE_TEXT, false),
+                new ColumnInfo(Messages.getString("KafkaProducerDialog.TableView.ValueCol.Label"),
+                        ColumnInfo.COLUMN_TYPE_TEXT, false), };
+
+        wProps = new TableView(transMeta, wGeneralComp,SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI, columnInfo, 1, lsMod, props);
+        FormData fdProps = new FormData();
+        fdProps.top = new FormAttachment(0, Const.MARGIN);
+        fdProps.left = new FormAttachment(0,  Const.MARGIN);
+        fdProps.bottom = new FormAttachment(100, 0);
+        fdProps.right = new FormAttachment(100, 0);
+        wProps.setLayoutData(fdProps);
+
+
+		fdGeneralComp = new FormData();
+        fdGeneralComp.top = new FormAttachment( 0, 0 );
+        fdGeneralComp.left = new FormAttachment( 0, 0 );
+        fdGeneralComp.bottom = new FormAttachment( 100, 0 );
+        fdGeneralComp.right = new FormAttachment( 100, 0 );
+		wGeneralComp.setLayoutData( fdGeneralComp );
+
+		wGeneralComp.layout();
+		wGeneralTab.setControl( wGeneralComp );
+	}
+
+    private void addFieldsTab() {
+
+        wFieldsTab = new CTabItem( wTabFolder, SWT.NONE );
+        wFieldsTab.setText( BaseMessages.getString( PKG, "KafkaProducerDialog.FieldsTab.TabTitle" ) );
+
+        FormLayout fieldsLayout = new FormLayout();
+        fieldsLayout.marginWidth = Const.FORM_MARGIN;
+        fieldsLayout.marginHeight = Const.FORM_MARGIN;
+
+        Composite wFieldsComp = new Composite( wTabFolder, SWT.NONE );
+        wFieldsComp.setLayout( fieldsLayout );
+        props.setLook( wFieldsComp );
+
+        wGet = new Button( wFieldsComp, SWT.PUSH );
+        wGet.setText( BaseMessages.getString( PKG, "System.Button.GetFields" ) );
+        wGet.setToolTipText( BaseMessages.getString( PKG, "System.Tooltip.GetFields" ) );
+
+        lsGet = new Listener() {
+            public void handleEvent( Event e ) {
+                getPreviousFields( wFields );
+            }
+        };
+        wGet.addListener( SWT.Selection, lsGet );
+
+        setButtonPositions( new Button[]{ wGet }, Const.MARGIN, null );
+
+        final int fieldsRowCount = producerMeta.getFields().size();
+
+        String[] names = this.fieldNames != null ? this.fieldNames : new String[]{ "" };
+        ColumnInfo[] columnsMeta = new ColumnInfo[2];
+        columnsMeta[0] =
+                new ColumnInfo(
+                        BaseMessages.getString( PKG, "KafkaProducerDialog.SourceNameColumn.Column" ),
+                        ColumnInfo.COLUMN_TYPE_CCOMBO, names, false );
+        columnsMeta[1] =
+                new ColumnInfo(
+                        BaseMessages.getString( PKG, "KafkaProducerDialog.TargetNameColumn.Column" ),
+                        ColumnInfo.COLUMN_TYPE_TEXT, false );
+
+        wFields =
+                new TableView(
+                        transMeta, wFieldsComp, SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI, columnsMeta, fieldsRowCount,
+                        lsMod, props );
+
+        FormData fdFields = new FormData();
+        fdFields.left = new FormAttachment( 0, Const.MARGIN );
+        fdFields.top = new FormAttachment( 0, Const.MARGIN );
+        fdFields.right = new FormAttachment( 100, -Const.MARGIN );
+        fdFields.bottom = new FormAttachment( wGet, -Const.MARGIN );
+        wFields.setLayoutData( fdFields );
+
+        FormData fdFieldsComp = new FormData();
+        fdFieldsComp.left = new FormAttachment( 0, 0 );
+        fdFieldsComp.top = new FormAttachment( 0, 0 );
+        fdFieldsComp.right = new FormAttachment( 100, 0 );
+        fdFieldsComp.bottom = new FormAttachment( 100, 0 );
+        wFieldsComp.setLayoutData( fdFieldsComp );
+
+        wFieldsComp.layout();
+        wFieldsTab.setControl( wFieldsComp );
+    }
+
+    private void getPreviousFields( TableView table ) {
+        try {
+            RowMetaInterface r = transMeta.getPrevStepFields( stepname );
+            if ( r != null ) {
+                BaseStepDialog.getFieldsFromPrevious( r, table, 1, new int[]{ 1, 2 }, null, 0, 0, null );
+            }
+        } catch ( KettleException ke ) {
+            new ErrorDialog( shell, BaseMessages.getString( PKG, "System.Dialog.GetFieldsFailed.Title" ), BaseMessages
+                    .getString( PKG, "System.Dialog.GetFieldsFailed.Message" ), ke );
+        }
+    }
 
 	/**
 	 * Copy information from the meta-data input to the dialog fields.
@@ -259,6 +365,9 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		wProps.removeEmptyRows();
 		wProps.setRowNums();
 		wProps.optWidth(true);
+
+        // Fields
+        mapToTableView( producerMeta.getFieldsMap(), wFields );
 
 		wStepname.selectAll();
 	}
@@ -293,6 +402,12 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		wProps.setRowNums();
 		wProps.optWidth(true);
 
+        producerMeta.clearFields();
+        for ( int i = 0; i < wFields.getItemCount(); i++ ) {
+            String[] row = wFields.getItem( i );
+            producerMeta.addField( row[0], row[1] );
+        }
+
 		producerMeta.setChanged();
 	}
 
@@ -304,4 +419,52 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		stepname = wStepname.getText();
 		dispose();
 	}
+
+    private void mapToTableView(Map<String, String> map, TableView table ) {
+        for ( String key : map.keySet() ) {
+            table.add( key, map.get( key ) );
+        }
+        table.removeEmptyRows();
+        table.setRowNums();
+    }
+
+    private void addStandardListeners() {
+	    lsCancel = new Listener() {
+			public void handleEvent(Event e) {
+				cancel();
+			}
+		};
+		lsOK = new Listener() {
+			public void handleEvent(Event e) {
+				ok();
+			}
+		};
+
+        lsMod = new ModifyListener() {
+            public void modifyText( ModifyEvent event ) {
+                producerMeta.setChanged();
+            }
+        };
+
+        wCancel.addListener(SWT.Selection, lsCancel);
+		wOK.addListener(SWT.Selection, lsOK);
+
+		lsDef = new SelectionAdapter() {
+			public void widgetDefaultSelected(SelectionEvent e) {
+				ok();
+			}
+		};
+		wStepname.addSelectionListener(lsDef);
+		wTopicName.addSelectionListener(lsDef);
+		wKeyField.addSelectionListener(lsDef);
+
+		// Detect X or ALT-F4 or something that kills this window...
+		shell.addShellListener(new ShellAdapter() {
+			public void shellClosed(ShellEvent e) {
+				cancel();
+			}
+		});
+
+
+    }
 }

@@ -2,18 +2,20 @@ package org.pentaho.di.trans.kafka.producer;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
+import org.apache.commons.lang.StringUtils;
 import org.pentaho.di.core.CheckResult;
 import org.pentaho.di.core.CheckResultInterface;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.database.DatabaseMeta;
 import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.exception.KettleStepException;
 import org.pentaho.di.core.exception.KettleXMLException;
+import org.pentaho.di.core.injection.Injection;
 import org.pentaho.di.core.row.RowMetaInterface;
+import org.pentaho.di.core.row.ValueMeta;
+import org.pentaho.di.core.row.ValueMetaInterface;
 import org.pentaho.di.core.variables.VariableSpace;
 import org.pentaho.di.core.xml.XMLHandler;
 import org.pentaho.di.repository.ObjectId;
@@ -67,7 +69,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 	private Properties kafkaProperties = new Properties();
 	private String topic;
 	private String keyField;
-        
+    List<Field> fields = new ArrayList<>();
 	public Properties getKafkaProperties() {
 		return kafkaProperties;
 	}
@@ -102,6 +104,36 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		this.keyField = field;
 	}
 
+    public List<Field> getFields() {
+        return Collections.unmodifiableList( fields );
+    }
+
+    public Map<String, String> getFieldsMap() {
+        Map<String, String> result = new TreeMap<>();
+        for ( Field f : fields ) {
+            result.put( f.sourceName, f.targetName );
+        }
+        return Collections.unmodifiableMap( result );
+    }
+
+    public void setFieldsMap( Map<String, String> values ) {
+        clearFields();
+        for ( String k : values.keySet() ) {
+            addField( k, values.get( k ) );
+        }
+    }
+
+    public void clearFields() {
+        this.fields.clear();
+    }
+
+    public void addField( String inputName, String nameInJson ) {
+        Field f = new Field();
+        f.sourceName = inputName;
+        f.targetName = StringUtils.isBlank( nameInJson ) ? inputName : nameInJson;
+        this.fields.add( f );
+    }
+
 
 	public void check(List<CheckResultInterface> remarks, TransMeta transMeta, StepMeta stepMeta, RowMetaInterface prev,
 					  String input[], String output[], RowMetaInterface info, VariableSpace space, Repository repository, IMetaStore metaStore) {
@@ -125,6 +157,20 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 
 	public StepDataInterface getStepData() {
 		return new KafkaProducerData();
+	}
+
+	/* This function adds meta data to the rows being pushed out */
+	public void getFields( RowMetaInterface r, String name, RowMetaInterface[] info, StepMeta nextStep,
+						   VariableSpace space, Repository repository, IMetaStore metaStore ) throws KettleStepException {
+		if ( StringUtils.isNotBlank( this.getKeyField() ) ) {
+			ValueMetaInterface valueMeta =
+					new ValueMeta( space.environmentSubstitute( this.getKeyField()), ValueMetaInterface.TYPE_STRING );
+			valueMeta.setOrigin( name );
+			// add if doesn't exist
+			if ( !r.exists( valueMeta ) ) {
+				r.addValueMeta( valueMeta );
+			}
+		}
 	}
 
 	public void loadXML(Node stepnode, List<DatabaseMeta> databases, IMetaStore metaStore)
@@ -212,4 +258,13 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 	public static boolean isEmpty(String str) {
 		return str == null || str.length() == 0;
 	}
+
+    public static class Field {
+        @Injection( name = "SOURCE_NAME" )
+        public String sourceName;
+        @Injection( name = "TARGET_NAME" )
+        public String targetName;
+    }
 }
+
+
