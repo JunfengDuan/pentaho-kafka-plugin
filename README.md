@@ -21,7 +21,7 @@ The producer depends on Apache Kafka 0.10.2.0, which means that the broker must 
 
 ### Installation ###
 
-1. Download ```pentaho-kafka-producer``` Zip archive from [latest release page](https://github.com/RuckusWirelessIL/pentaho-kafka-producer/releases/latest).
+1. Download ```pentaho-kafka-plugin``` Zip
 2. Extract downloaded archive into *plugins/steps* directory of your Pentaho Data Integration distribution.
 
 
