@@ -1,26 +1,20 @@
 package org.pentaho.di.ui.trans.kafka.producer;
 
 import java.awt.*;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TreeSet;
+import java.util.*;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
-import org.eclipse.swt.events.ModifyEvent;
-import org.eclipse.swt.events.ModifyListener;
-import org.eclipse.swt.events.SelectionAdapter;
-import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.ShellAdapter;
-import org.eclipse.swt.events.ShellEvent;
+import org.eclipse.swt.events.*;
 import org.eclipse.swt.graphics.*;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
+import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
@@ -44,6 +38,8 @@ import org.pentaho.di.ui.trans.step.BaseStepDialog;
 
 import org.pentaho.di.trans.kafka.producer.KafkaProducerMeta;
 import org.pentaho.di.trans.kafka.producer.Messages;
+import org.pentaho.ui.xul.swing.tags.SwingRadio;
+import org.pentaho.ui.xul.swt.tags.SwtRadioGroup;
 
 /**
  * UI for the Kafka Producer step
@@ -65,6 +61,10 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 
 	private CTabItem wFieldsTab;
     private TableView wFields;
+
+    private CTabItem wOperationTab;
+    private Group opGroup;
+    private Map<String, String> op = new HashMap<>();
 
 	private KafkaProducerMeta producerMeta;
 	private TextVar wTopicName;
@@ -187,6 +187,9 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		// Fields TAB
 		addFieldsTab();
 
+		// Operation TAB
+        addOperationTab();
+
 		// Buttons
 		wOK = new Button(shell, SWT.PUSH);
 		wOK.setText(BaseMessages.getString("System.Button.OK")); //$NON-NLS-1$
@@ -221,7 +224,45 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		return stepname;
 	}
 
-	private void addGeneralTab() {
+    private void addOperationTab() {
+        wOperationTab = new CTabItem( wTabFolder, SWT.NONE );
+        wOperationTab.setText( BaseMessages.getString( PKG, "KafkaProducerDialog.Operation.Tab" ) );
+
+        RowLayout rowLayout = new RowLayout(SWT.VERTICAL);
+        rowLayout.marginLeft = 40;
+        rowLayout.marginTop = 20;
+        rowLayout.spacing = 20;
+
+        opGroup = new Group(wTabFolder, SWT.NONE);
+        opGroup.setLayout(rowLayout);
+
+        Button buttonInsert = new Button(opGroup, SWT.RADIO);
+        buttonInsert.setText("Insert");
+
+        Button buttonUpdate = new Button(opGroup, SWT.RADIO);
+        buttonUpdate.setText("Update");
+
+        Button buttonDelete = new Button(opGroup, SWT.RADIO);
+        buttonDelete.setText("Delete");
+
+        SelectionListener selectionListener = new SelectionAdapter () {
+            public void widgetSelected(SelectionEvent event) {
+                Button button = (Button) event.widget;
+                String operation = StringUtils.isEmpty(button.getText()) ? "Insert" : button.getText();
+                op.put("op", operation);
+            }
+        };
+
+        buttonInsert.addSelectionListener(selectionListener);
+        buttonUpdate.addSelectionListener(selectionListener);
+        buttonDelete.addSelectionListener(selectionListener);
+
+        opGroup.layout();
+        wOperationTab.setControl(opGroup);
+
+    }
+
+    private void addGeneralTab() {
 		wGeneralTab = new CTabItem( wTabFolder, SWT.NONE );
 		wGeneralTab.setText( BaseMessages.getString( PKG, "KafkaProducerDialog.General.Tab" ) );
 
@@ -344,6 +385,7 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		wTopicName.setText(Const.NVL(producerMeta.getTopic(), ""));
 		wKeyField.setText(Const.NVL(producerMeta.getKeyField(), ""));
 
+		//general
 		TreeSet<String> propNames = new TreeSet<String>();
 		propNames.addAll(Arrays.asList(KafkaProducerMeta.KAFKA_PROPERTIES_NAMES));
 		propNames.addAll(producerMeta.getKafkaProperties().stringPropertyNames());
@@ -369,7 +411,16 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
         // Fields
         mapToTableView( producerMeta.getFieldsMap(), wFields );
 
-		wStepname.selectAll();
+        //operation
+        Map<String, String> operation = producerMeta.getOperation();
+        String op = operation.get("op")==null ? "Insert": operation.get("op");
+        Control[] children = opGroup.getChildren();
+        for(Control c : children){
+            Button button = (Button) c;
+            if(op.equals(button.getText()))
+                button.setSelection(true);
+        }
+        wStepname.selectAll();
 	}
 
 	private void cancel() {
@@ -385,6 +436,7 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		producerMeta.setTopic(wTopicName.getText());
 		producerMeta.setKeyField(wKeyField.getText());
 
+		//general
 		Properties kafkaProperties = producerMeta.getKafkaProperties();
 		int nrNonEmptyFields = wProps.nrNonEmpty();
 		for (int i = 0; i < nrNonEmptyFields; i++) {
@@ -402,12 +454,22 @@ public class KafkaProducerDialog extends BaseStepDialog implements StepDialogInt
 		wProps.setRowNums();
 		wProps.optWidth(true);
 
+		//fields
         producerMeta.clearFields();
         for ( int i = 0; i < wFields.getItemCount(); i++ ) {
             String[] row = wFields.getItem( i );
             producerMeta.addField( row[0], row[1] );
         }
 
+        //operation
+        Control[] children = opGroup.getChildren();
+        for(Control c : children){
+            Button button = (Button) c;
+            if(button.getSelection()){
+                op.put("op", button.getText());
+            }
+        }
+        producerMeta.setOperation(op);
 		producerMeta.setChanged();
 	}
 

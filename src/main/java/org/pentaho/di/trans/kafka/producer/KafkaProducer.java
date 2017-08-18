@@ -1,12 +1,17 @@
 package org.pentaho.di.trans.kafka.producer;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.alibaba.fastjson.JSONObject;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.exception.KettleStepException;
+import org.pentaho.di.core.row.RowDataUtil;
 import org.pentaho.di.core.row.RowMetaInterface;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
@@ -23,7 +28,6 @@ import org.pentaho.di.trans.step.StepMetaInterface;
  * @author Michael Spector
  */
 public class KafkaProducer extends BaseStep implements StepInterface {
-
 
 	public KafkaProducer(StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
 			Trans trans) {
@@ -107,9 +111,10 @@ public class KafkaProducer extends BaseStep implements StepInterface {
 		try {
 
 			String topic = environmentSubstitute(meta.getTopic());
-            String message = getJsonString(inputRowMeta, row);
+			JSONObject jsonObject = getJsonString(inputRowMeta, row);
+            JSONObject message = initFormMeta(meta,jsonObject);
 
-            data.producer.send(new ProducerRecord<Object, Object>(topic,message));
+            data.producer.send(new ProducerRecord<>(topic,message.toString()));
 
 			incrementLinesOutput();
 		} catch (Exception e) {
@@ -125,12 +130,38 @@ public class KafkaProducer extends BaseStep implements StepInterface {
 		return true;
 	}
 
-    private String getJsonString(RowMetaInterface inputRowMeta, Object[] row) {
+	private JSONObject initFormMeta(KafkaProducerMeta meta, JSONObject json){
+        //fields
+		JSONObject jsonObject = new JSONObject();
+        List<KafkaProducerMeta.Field> fields = meta.getFields();
+        if(fields.isEmpty()){
+            jsonObject.putAll(json);
+        }else {
+            json.entrySet().forEach(entry -> jsonObject.put(updateKey(entry.getKey(), fields), entry.getValue()));
+        }
+
+        //operation
+        Map<String, String> operation = meta.getOperation();
+        if(!operation.isEmpty()){
+            jsonObject.put("op", operation.get("op"));
+        }
+
+        return jsonObject;
+    }
+
+    private String updateKey(String key, List<KafkaProducerMeta.Field> fields){
+        List<KafkaProducerMeta.Field> collect = fields.stream().filter(field -> key.equals(field.sourceName))
+                .collect(Collectors.toList());
+        return collect.get(0).targetName;
+    }
+
+
+    private JSONObject getJsonString(RowMetaInterface inputRowMeta, Object[] row) {
         JSONObject json = new JSONObject();
         String[] fieldNames = inputRowMeta.getFieldNames();
         IntStream.range(0,fieldNames.length).forEach(i -> json.put(fieldNames[i],row[i]));
 
-        return json.toJSONString();
+        return json;
     }
 
     public void stopRunning(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {

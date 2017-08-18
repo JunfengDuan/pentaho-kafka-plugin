@@ -69,7 +69,17 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 	private Properties kafkaProperties = new Properties();
 	private String topic;
 	private String keyField;
-    List<Field> fields = new ArrayList<>();
+    private List<Field> fields = new ArrayList<>();
+
+    public Map<String, String> getOperation() {
+        return operation;
+    }
+
+    public void setOperation(Map<String, String> operation) {
+        this.operation = operation;
+    }
+
+    private Map<String, String> operation = new HashMap<>();
 	public Properties getKafkaProperties() {
 		return kafkaProperties;
 	}
@@ -179,16 +189,45 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		try {
 			topic = XMLHandler.getTagValue(stepnode, "TOPIC");
 			keyField = XMLHandler.getTagValue(stepnode, "KEYFIELD");
-			Node kafkaNode = XMLHandler.getSubNode(stepnode, "KAFKA");
-			String[] kafkaElements = XMLHandler.getNodeElements(kafkaNode);
+
+            // General
+			Node general = XMLHandler.getSubNode(stepnode, "KAFKA");
+			String[] kafkaElements = XMLHandler.getNodeElements(general);
 			if (kafkaElements != null) {
 				for (String propName : kafkaElements) {
-					String value = XMLHandler.getTagValue(kafkaNode, propName);
+					String value = XMLHandler.getTagValue(general, propName);
 					if (value != null) {
 						kafkaProperties.put(propName, value);
 					}
 				}
 			}
+
+            // Fields
+            Node fields = XMLHandler.getSubNode( stepnode, Dom.TAG_FIELDS );
+            int nrFields = XMLHandler.countNodes( fields, Dom.TAG_FIELD );
+            this.clearFields();
+            for ( int i = 0; i < nrFields; i++ ) {
+                Node fNode = XMLHandler.getSubNodeByNr( fields, Dom.TAG_FIELD, i );
+
+                String colName = XMLHandler.getTagValue( fNode, Dom.TAG_NAME );
+                String targetName = XMLHandler.getTagValue( fNode, Dom.TAG_TARGET );
+
+                this.addField( colName, targetName );
+            }
+
+            //operation
+            Node op = XMLHandler.getSubNode( stepnode, Dom.TAG_OPERATION);
+            if(op != null){
+                String[] ops = XMLHandler.getNodeElements(op);
+                if(ops != null){
+                    Arrays.asList(ops).forEach(propName ->{
+                        String value = XMLHandler.getTagValue(op, propName);
+                        operation.put(Dom.TAG_OP, value);
+                    } );
+                }
+            }
+
+
 		} catch (Exception e) {
 			throw new KettleXMLException(Messages.getString("KafkaProducerMeta.Exception.loadXml"), e);
 		}
@@ -196,6 +235,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 
 	public String getXML() throws KettleException {
 		StringBuilder retval = new StringBuilder();
+
 		if (topic != null) {
 			retval.append("    ").append(XMLHandler.addTagValue("TOPIC", topic));
 		}
@@ -203,7 +243,10 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 		if (keyField != null) {
 			retval.append("    ").append(XMLHandler.addTagValue("KEYFIELD", keyField));
 		}
-		retval.append("    ").append(XMLHandler.openTag("KAFKA")).append(Const.CR);
+
+        // General
+        retval.append("    ").append( XMLHandler.openTag("KAFKA") ).append( Const.CR );
+
 		for (String name : kafkaProperties.stringPropertyNames()) {
 			String value = kafkaProperties.getProperty(name);
 			if (value != null) {
@@ -211,6 +254,22 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			}
 		}
 		retval.append("    ").append(XMLHandler.closeTag("KAFKA")).append(Const.CR);
+
+        // Fields
+        retval.append("    ").append( XMLHandler.openTag( Dom.TAG_FIELDS ) ).append( Const.CR );
+        for ( Field f : fields ) {
+            retval.append("    ").append( XMLHandler.openTag( Dom.TAG_FIELD ) ).append( Const.CR );
+            retval.append("    ").append( XMLHandler.addTagValue( Dom.TAG_NAME, f.sourceName ) );
+            retval.append("    ").append( XMLHandler.addTagValue( Dom.TAG_TARGET, f.targetName ) );
+            retval.append("    ").append( XMLHandler.closeTag( Dom.TAG_FIELD ) ).append( Const.CR );
+        }
+        retval.append("    ").append( XMLHandler.closeTag( Dom.TAG_FIELDS ) ).append( Const.CR );
+
+        //operation
+        retval.append("    ").append( XMLHandler.openTag( Dom.TAG_OPERATION ) ).append( Const.CR );
+        String op = operation.get(Dom.TAG_OP) == null ? "Insert" : operation.get(Dom.TAG_OP);
+        retval.append("    ").append( XMLHandler.addTagValue( Dom.TAG_OP,  op) );
+        retval.append("    ").append( XMLHandler.closeTag( Dom.TAG_OPERATION ) ).append( Const.CR );
 		return retval.toString();
 	}
 
@@ -220,6 +279,7 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			topic = rep.getStepAttributeString(stepId, "TOPIC");
 			keyField = rep.getStepAttributeString(stepId, "KEYFIELD");
 			String kafkaPropsXML = rep.getStepAttributeString(stepId, "KAFKA");
+
 			if (kafkaPropsXML != null) {
 				kafkaProperties.loadFromXML(new ByteArrayInputStream(kafkaPropsXML.getBytes()));
 			}
@@ -230,7 +290,20 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 					kafkaProperties.put(name, value);
 				}
 			}
-		} catch (Exception e) {
+
+            // Fields
+            clearFields();
+            int fieldsNr = rep.countNrStepAttributes( stepId, joinRepAttr( Dom.TAG_FIELD, Dom.TAG_NAME ) );
+            for ( int i = 0; i < fieldsNr; i++ ) {
+                String name = rep.getStepAttributeString( stepId, i, joinRepAttr( Dom.TAG_FIELD, Dom.TAG_NAME ) );
+                String target = rep.getStepAttributeString( stepId, i, joinRepAttr( Dom.TAG_FIELD, Dom.TAG_TARGET ) );
+                addField( name, target );
+            }
+
+            //operation
+            String op = rep.getStepAttributeString(stepId, Dom.TAG_OP);
+            operation.put(Dom.TAG_OP,op);
+        } catch (Exception e) {
 			throw new KettleException("KafkaProducerMeta.Exception.loadRep", e);
 		}
 	}
@@ -247,15 +320,39 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
 			ByteArrayOutputStream buf = new ByteArrayOutputStream();
 			kafkaProperties.storeToXML(buf, null);
 			rep.saveStepAttribute(transformationId, stepId, "KAFKA", buf.toString());
+
+
+            // Fields
+            for ( int i = 0; i < fields.size(); i++ ) {
+                rep.saveStepAttribute( transformationId, stepId, i, joinRepAttr( Dom.TAG_FIELD, Dom.TAG_NAME ), fields.get(
+                        i ).sourceName );
+                rep.saveStepAttribute( transformationId, stepId, i, joinRepAttr( Dom.TAG_FIELD, Dom.TAG_TARGET ), fields.get(
+                        i ).targetName );
+            }
+
+            //operation
+            if(!operation.isEmpty()){
+                rep.saveStepAttribute(transformationId, stepId, Dom.TAG_OPERATION, Dom.TAG_OP);
+                rep.saveStepAttribute(transformationId, stepId, Dom.TAG_OPERATION, operation.get(Dom.TAG_OP));
+            }
+            ///////////////////////////
+            ///////同步模型数据/////////
+            /////////////////////////
+
 		} catch (Exception e) {
 			throw new KettleException("KafkaProducerMeta.Exception.saveRep", e);
 		}
 	}
 
 	public void setDefault() {
-	}
 
-	public static boolean isEmpty(String str) {
+	}
+    private static String joinRepAttr( String... args ) {
+        return StringUtils.join( args, "_" );
+    }
+
+
+    public static boolean isEmpty(String str) {
 		return str == null || str.length() == 0;
 	}
 
@@ -264,6 +361,22 @@ public class KafkaProducerMeta extends BaseStepMeta implements StepMetaInterface
         public String sourceName;
         @Injection( name = "TARGET_NAME" )
         public String targetName;
+    }
+
+    /**
+     * Serialization aids
+     */
+    private static class Dom {
+        static final String TAG_GENERAL = "general";
+        static final String TAG_FIELDS = "fields";
+        static final String TAG_FIELD = "field";
+
+        static final String TAG_NAME = "columnName";
+        static final String TAG_TARGET = "targetName";
+
+        static final String TAG_OPERATION="operation";
+        static final String TAG_OP="op";
+
     }
 }
 
